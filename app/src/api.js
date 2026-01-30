@@ -5,9 +5,23 @@
 
 const defaultBaseUrl = 'http://127.0.0.1:8000';
 
+const PROXY_BASE_PATH = '/comfyui';
+
 function normalizeBaseUrl(url) {
   const u = url || (typeof window !== 'undefined' && window.__COMFY_BASE_URL__) || defaultBaseUrl;
   return String(u).replace(/\/+$/, '') || defaultBaseUrl;
+}
+
+function getEffectiveBase(baseUrl) {
+  const base = normalizeBaseUrl(baseUrl);
+  if (
+    typeof window !== 'undefined' &&
+    import.meta.env.DEV &&
+    (base === 'http://127.0.0.1:8000' || base === 'http://localhost:8000')
+  ) {
+    return window.location.origin + PROXY_BASE_PATH;
+  }
+  return base;
 }
 
 export function getBaseUrl() {
@@ -23,7 +37,7 @@ export function setBaseUrl(url) {
  * Returns { ok: true, checkpoints: number } or { ok: false, error: string, triedUrl: string }.
  */
 export async function testConnection(baseUrl = getBaseUrl()) {
-  const base = normalizeBaseUrl(baseUrl);
+  const base = getEffectiveBase(baseUrl);
   const triedUrl = `${base}/object_info`;
   try {
     const res = await fetch(triedUrl);
@@ -38,11 +52,11 @@ export async function testConnection(baseUrl = getBaseUrl()) {
     if (msg === 'Failed to fetch') {
       return {
         ok: false,
-        triedUrl: base,
+        triedUrl: normalizeBaseUrl(baseUrl),
         error: 'Connection failed.',
       };
     }
-    return { ok: false, error: msg, triedUrl: base };
+    return { ok: false, error: msg, triedUrl: normalizeBaseUrl(baseUrl) };
   }
 }
 
@@ -51,7 +65,7 @@ export async function testConnection(baseUrl = getBaseUrl()) {
  * Returns array of strings; empty if ComfyUI uses a different structure or is unreachable.
  */
 export async function fetchCheckpoints(baseUrl = getBaseUrl()) {
-  const base = normalizeBaseUrl(baseUrl);
+  const base = getEffectiveBase(baseUrl);
   try {
     const res = await fetch(`${base}/object_info`);
     if (!res.ok) return [];
@@ -61,7 +75,13 @@ export async function fetchCheckpoints(baseUrl = getBaseUrl()) {
     const required = node.input?.required;
     const ckpt = required?.ckpt_name;
     if (!ckpt || !Array.isArray(ckpt)) return [];
-    return ckpt.map((item) => (Array.isArray(item) ? item[0] : item));
+    return ckpt
+      .map((item) => {
+        if (Array.isArray(item) && item.length > 0 && typeof item[0] === 'string') return item[0];
+        if (typeof item === 'string') return item;
+        return null;
+      })
+      .filter(Boolean);
   } catch {
     return [];
   }
@@ -136,7 +156,7 @@ export function buildPrompt(params) {
  * Queue prompt and return prompt_id.
  */
 export async function queuePrompt(prompt, baseUrl = getBaseUrl()) {
-  const base = normalizeBaseUrl(baseUrl);
+  const base = getEffectiveBase(baseUrl);
   const res = await fetch(`${base}/prompt`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -154,25 +174,38 @@ export async function queuePrompt(prompt, baseUrl = getBaseUrl()) {
  * Get history for a prompt_id. Returns output node data (e.g. images) when finished.
  */
 export async function getHistory(promptId, baseUrl = getBaseUrl()) {
-  const base = normalizeBaseUrl(baseUrl);
+  const base = getEffectiveBase(baseUrl);
   const res = await fetch(`${base}/history/${promptId}`);
   if (!res.ok) throw new Error(`History failed: ${res.status}`);
   const data = await res.json();
   return data[promptId];
 }
 
+function getComfyUIErrorMessage(status) {
+  const messages = status?.messages;
+  if (!Array.isArray(messages)) return null;
+  const errorEntry = messages.find((m) => Array.isArray(m) && m[0] === 'execution_error');
+  const data = errorEntry?.[1];
+  if (data?.exception_message) return data.exception_message.trim();
+  if (data?.exception_type) return `${data.exception_type}: ${data.exception_message || 'Unknown'}`;
+  return null;
+}
+
 /**
  * Poll until prompt is in history with outputs (or error).
  */
 export async function waitForCompletion(promptId, baseUrl = getBaseUrl(), options = {}) {
-  const base = normalizeBaseUrl(baseUrl);
+  const base = getEffectiveBase(baseUrl);
   const { pollInterval = 800, maxWait = 300000 } = options;
   const start = Date.now();
   while (Date.now() - start < maxWait) {
     const history = await getHistory(promptId, base);
     if (history) {
-      if (history.outputs) return { ok: true, history };
-      if (history.status?.status_str === 'error') return { ok: false, error: history.status?.messages?.[0] || 'Unknown error' };
+      if (history.outputs && Object.keys(history.outputs).length > 0) return { ok: true, history };
+      if (history.status?.status_str === 'error') {
+        const msg = getComfyUIErrorMessage(history.status) || 'ComfyUI reported an error.';
+        return { ok: false, error: msg };
+      }
     }
     await new Promise((r) => setTimeout(r, pollInterval));
   }
@@ -183,7 +216,7 @@ export async function waitForCompletion(promptId, baseUrl = getBaseUrl(), option
  * Get image URL for a ComfyUI output image.
  */
 export function getImageUrl(filename, subfolder = '', type = 'output', baseUrl = getBaseUrl()) {
-  const base = normalizeBaseUrl(baseUrl);
+  const base = getEffectiveBase(baseUrl);
   const params = new URLSearchParams({ filename, type });
   if (subfolder) params.set('subfolder', subfolder);
   return `${base}/view?${params.toString()}`;
@@ -194,7 +227,7 @@ export function getImageUrl(filename, subfolder = '', type = 'output', baseUrl =
  * If ckptName is not in ComfyUI's list, fetches the list and uses the first available checkpoint.
  */
 export async function runGeneration(params, baseUrl = getBaseUrl()) {
-  const base = normalizeBaseUrl(baseUrl);
+  const base = getEffectiveBase(baseUrl);
   let ckptName = params.ckptName;
   const checkpoints = await fetchCheckpoints(base);
   if (checkpoints.length > 0) {
@@ -210,15 +243,21 @@ export async function runGeneration(params, baseUrl = getBaseUrl()) {
 
   const images = [];
   const outputs = result.history?.outputs || {};
-  for (const nodeId of Object.keys(outputs)) {
-    const node = outputs[nodeId];
-    if (node.images) {
-      for (const img of node.images) {
-        images.push({
-          filename: img.filename,
-          subfolder: img.subfolder || '',
-          type: img.type || 'output',
-        });
+  const outputValues = typeof outputs === 'object' && !Array.isArray(outputs)
+    ? Object.values(outputs)
+    : Array.isArray(outputs) ? outputs : [];
+  for (const node of outputValues) {
+    const list = node?.images ?? node?.gifs;
+    if (Array.isArray(list)) {
+      for (const img of list) {
+        const filename = img?.filename ?? img?.name;
+        if (filename) {
+          images.push({
+            filename,
+            subfolder: img.subfolder ?? '',
+            type: img.type ?? 'output',
+          });
+        }
       }
     }
   }

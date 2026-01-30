@@ -83,17 +83,28 @@ function App() {
         ckptName: selectedCheckpoint || undefined,
       };
       const { images } = await runGeneration(params, baseUrl || undefined);
-      setStatus('Done');
-      setResults(
-        images.map((img) => ({
-          url: getImageUrl(img.filename, img.subfolder, img.type, baseUrl || undefined),
-          filename: img.filename,
-        }))
-      );
+      if (images.length === 0) {
+        setStatus('');
+        setError('Generation finished but no images in response. The workflow output may use a different format.');
+        setResults([]);
+      } else {
+        setStatus('Done');
+        setError(null);
+        setResults(
+          images.map((img) => ({
+            url: getImageUrl(img.filename, img.subfolder, img.type, baseUrl || undefined),
+            filename: img.filename,
+          }))
+        );
+      }
     } catch (err) {
       const msg = err.message || 'Generation failed';
       const isNetworkError = msg === 'Failed to fetch' || msg.includes('NetworkError');
-      setError(isNetworkError ? 'Could not reach ComfyUI.' : msg);
+      let displayError = isNetworkError ? 'Could not reach ComfyUI.' : msg;
+      if (msg.includes('Errno 22')) {
+        displayError += ' On Windows this often comes from the progress bar (tqdm). Try running ComfyUI with output redirected (e.g. python main.py > log.txt 2>&1) or search "ComfyUI Errno 22 Windows".';
+      }
+      setError(displayError);
       setStatus('');
     } finally {
       setGenerating(false);
@@ -142,7 +153,7 @@ function App() {
             {connectionTest && (
               <div className={`connection-result ${connectionTest.ok ? 'ok' : 'fail'}`}>
                 {connectionTest.ok ? (
-                  <p>✓ ComfyUI reachable. {connectionTest.checkpoints} checkpoint(s) found.</p>
+                  <p>ComfyUI reachable. {connectionTest.checkpoints} checkpoint(s) found.</p>
                 ) : (
                   <>
                     <p>{connectionTest.error}</p>
@@ -172,7 +183,7 @@ function App() {
                 disabled={generating}
               >
                 {checkpoints.map((name) => (
-                  <option key={name} value={name}>{name}</option>
+                  <option key={String(name)} value={String(name)}>{String(name)}</option>
                 ))}
               </select>
             </div>
