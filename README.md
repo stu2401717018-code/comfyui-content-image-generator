@@ -39,7 +39,7 @@
 
 - **app/** – React + Vite приложение с форма за параметри и визуализация на резултатите.
 - Стартиране: `cd app && npm install && npm run dev`.
-- Изисква ComfyUI да работи с разрешен CORS (напр. `python main.py --enable-cors`).
+- В режим dev приложението използва Vite proxy към ComfyUI при подразбирания адрес (`http://127.0.0.1:8000`), така че CORS не е задължителен. При собствен URL или production ComfyUI трябва да разрешава CORS (напр. `python main.py --enable-cors`).
 
 Подробности в [**app/README.md**](app/README.md).
 
@@ -48,6 +48,6 @@
 ## Бърз старт
 
 1. Инсталирайте и стартирайте ComfyUI с един checkpoint (вижте [workflow/MODELS.md](workflow/MODELS.md)).
-2. Стартирайте ComfyUI с `--enable-cors`.
+2. По избор: стартирайте ComfyUI с `--enable-cors` ако ще ползвате собствен ComfyUI URL; при подразбирания адрес `http://127.0.0.1:8000` в dev proxy-то на Vite избягва нуждата от CORS.
 3. В `app/` изпълнете `npm install` и `npm run dev`.
-4. Отворете уеб приложението, въведете ComfyUI адрес, попълнете промпт и параметри и натиснете „Генерирай“.
+4. Отворете уеб приложението, при нужда въведете ComfyUI URL, натиснете „Test connection“, попълнете промпт и параметри и натиснете „Generate“.
