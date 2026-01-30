@@ -93,11 +93,7 @@ function App() {
     } catch (err) {
       const msg = err.message || 'Generation failed';
       const isNetworkError = msg === 'Failed to fetch' || msg.includes('NetworkError');
-      setError(
-        isNetworkError
-          ? `Cannot reach ComfyUI at ${baseUrl || 'the configured URL'}. Check that ComfyUI is running, the URL/port is correct (e.g. http://127.0.0.1:8000), and CORS is enabled (*).`
-          : msg
-      );
+      setError(isNetworkError ? 'Could not reach ComfyUI.' : msg);
       setStatus('');
     } finally {
       setGenerating(false);
@@ -144,11 +140,26 @@ function App() {
               </button>
             </div>
             {connectionTest && (
-              <p className={`connection-result ${connectionTest.ok ? 'ok' : 'fail'}`}>
-                {connectionTest.ok
-                  ? `✓ ComfyUI reachable. ${connectionTest.checkpoints} checkpoint(s) found.`
-                  : `✗ ${connectionTest.error}`}
-              </p>
+              <div className={`connection-result ${connectionTest.ok ? 'ok' : 'fail'}`}>
+                {connectionTest.ok ? (
+                  <p>✓ ComfyUI reachable. {connectionTest.checkpoints} checkpoint(s) found.</p>
+                ) : (
+                  <>
+                    <p>{connectionTest.error}</p>
+                    {(connectionTest.triedUrl || baseUrl) && (
+                      <p className="connection-actions">
+                        <a
+                          href={(connectionTest.triedUrl || baseUrl).replace(/\/+$/, '')}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Try to open ComfyUI url
+                        </a>
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
             )}
           </div>
 

@@ -131,6 +131,27 @@
   color: var(--error);
 }
 
+.connection-result.fail p {
+  margin: 0 0 0.5rem;
+}
+
+.connection-result.fail p:last-child {
+  margin-bottom: 0;
+}
+
+.connection-actions {
+  font-size: 0.8rem;
+  margin-top: 0.5rem !important;
+}
+
+.connection-actions a {
+  color: var(--accent);
+}
+
+.connection-actions a:hover {
+  text-decoration: underline;
+}
+
 .row.two-cols {
   display: grid;
   grid-template-columns: 1fr 1fr;

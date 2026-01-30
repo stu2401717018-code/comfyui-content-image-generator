@@ -20,13 +20,14 @@ export function setBaseUrl(url) {
 
 /**
  * Test if ComfyUI is reachable from the browser (connection + CORS).
- * Returns { ok: true, checkpoints: number } or { ok: false, error: string }.
+ * Returns { ok: true, checkpoints: number } or { ok: false, error: string, triedUrl: string }.
  */
 export async function testConnection(baseUrl = getBaseUrl()) {
   const base = normalizeBaseUrl(baseUrl);
+  const triedUrl = `${base}/object_info`;
   try {
-    const res = await fetch(`${base}/object_info`);
-    if (!res.ok) return { ok: false, error: `Server returned ${res.status}` };
+    const res = await fetch(triedUrl);
+    if (!res.ok) return { ok: false, error: `Server returned ${res.status}`, triedUrl };
     const info = await res.json();
     const node = info?.CheckpointLoaderSimple;
     const list = node?.input?.required?.ckpt_name;
@@ -37,10 +38,11 @@ export async function testConnection(baseUrl = getBaseUrl()) {
     if (msg === 'Failed to fetch') {
       return {
         ok: false,
-        error: 'Browser could not reach ComfyUI. Either ComfyUI is not running on this port, or CORS is blocking the request. Open the URL in a new tab: if the ComfyUI page loads, the port is correct — then enable CORS (*) in ComfyUI Settings → Server.',
+        triedUrl: base,
+        error: 'Connection failed.',
       };
     }
-    return { ok: false, error: msg };
+    return { ok: false, error: msg, triedUrl: base };
   }
 }
 

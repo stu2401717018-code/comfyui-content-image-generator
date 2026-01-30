@@ -3,6 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- ComfyUI: allow common ports so user's URL field works (8000, 8188). CSP cannot be updated at runtime. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="connect-src 'self' http://127.0.0.1:8000 ws://127.0.0.1:8000 http://127.0.0.1:8188 ws://127.0.0.1:8188 http://localhost:8000 ws://localhost:8000 http://localhost:8188 ws://localhost:8188 https://fonts.googleapis.com https://fonts.gstatic.com;"
+    />
     <title>Content Image Generator | ComfyUI</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
